@@ -24,6 +24,23 @@ __device__ Vec3 normalize(Vec3 v) {
     return createVec3(v.x/len, v.y/len, v.z/len);
 }
 
+__device__ float hitSphere(Vec3 center, float radius, Vec3 rayOrigin, Vec3 rayDir) {
+    Vec3 oc = createVec3(
+        rayOrigin.x - center.x,
+        rayOrigin.y - center.y,
+        rayOrigin.z - center.z
+    );
+
+    float a = rayDir.x*rayDir.x + rayDir.y*rayDir.y + rayDir.z*rayDir.z;
+    float b = 2.0f * (oc.x*rayDir.x + oc.y*rayDir.y + oc.z*rayDir.z);
+    float c = (oc.x*oc.x + oc.y*oc.y + oc.z*oc.z) - radius*radius;
+
+    float discriminant = b*b - 4*a*c;
+
+    if (discriminant < 0) return -1.0f;
+    return (-b - sqrtf(discriminant)) / (2.0f * a);
+}
+
 __global__ void renderKernel(unsigned char* image) {
     // same calculation to get the global unique index of a thread
     int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -50,17 +67,50 @@ __global__ void renderKernel(unsigned char* image) {
     // at the bottom (t=0) and a soft blue (128,178,255) at the top (t=1). 
     // The formula (1-t)*A + t*B is the standard lerp pattern.
     
-    float t = 0.5f * (rayDir.y + 1.0f);
-    unsigned char r = (unsigned char)((1.0f - t) * 255 + t * 128);
-    unsigned char g = (unsigned char)((1.0f - t) * 255 + t * 178);
-    unsigned char b = (unsigned char)((1.0f - t) * 255 + t * 255);
+    // float t = 0.5f * (rayDir.y + 1.0f);
+    // unsigned char r = (unsigned char)((1.0f - t) * 255 + t * 128);
+    // unsigned char g = (unsigned char)((1.0f - t) * 255 + t * 178);
+    // unsigned char b = (unsigned char)((1.0f - t) * 255 + t * 255);
 
-    // 3 bytes per pixel (RGB)
+    // // 3 bytes per pixel (RGB)
     int idx = (y * WIDTH + x) * 3;
 
-    image[idx + 0] = r;
-    image[idx + 1] = g;
-    image[idx + 2] = b;
+    // image[idx + 0] = r;
+    // image[idx + 1] = g;
+    // image[idx + 2] = b;
+
+    Vec3 sphereCenter = createVec3(0.0f, 0.0f, -2.0f);
+    float t = hitSphere(sphereCenter, 0.5f, rayOrigin, rayDir);
+
+    if (t > 0.0f) {
+        // hit point
+        Vec3 hitPoint = createVec3(
+            rayOrigin.x + t * rayDir.x,
+            rayOrigin.y + t * rayDir.y,
+            rayOrigin.z + t * rayDir.z
+        );
+
+        // surface normal
+        Vec3 normal = normalize(createVec3(
+            hitPoint.x - sphereCenter.x,
+            hitPoint.y - sphereCenter.y,
+            hitPoint.z - sphereCenter.z
+        ));
+
+        // step 3: dot product with light direction
+        Vec3 lightDir = normalize(createVec3(1.0f, 1.0f, 0.5f));
+        float brightness = normal.x*lightDir.x + normal.y*lightDir.y + normal.z*lightDir.z;
+        if (brightness < 0.0f) brightness = 0.0f;
+
+        image[idx + 0] = (unsigned char)(brightness * 255);
+        image[idx + 1] = 0;
+        image[idx + 2] = 0;
+    } else {
+        float t2 = 0.5f * (rayDir.y + 1.0f);
+        image[idx + 0] = (unsigned char)((1.0f - t2) * 255 + t2 * 128);
+        image[idx + 1] = (unsigned char)((1.0f - t2) * 255 + t2 * 178);
+        image[idx + 2] = (unsigned char)((1.0f - t2) * 255 + t2 * 255);
+    }
 }
 
 int main() {
