@@ -20,6 +20,9 @@ __host__ __device__ Vec3 normalize(Vec3 v) {
     return createVec3(v.x/len, v.y/len, v.z/len);
 }
 
+// a -> the origin
+// b -> the direction
+
 __host__ __device__ float dot(Vec3 a, Vec3 b) {
     return a.x*b.x + a.y*b.y + a.z*b.z;
 }
